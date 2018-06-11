@@ -1,0 +1,3 @@
+“(),:;<>[\]@example.com
+just"not"right@example.com
+this\ is"really"not\allowed@example.com
