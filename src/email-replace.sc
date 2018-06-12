@@ -3,10 +3,8 @@ import ammonite.ops._
 
 import scala.annotation.tailrec
 import scala.collection.breakOut
+import scala.util.matching.Regex
 
-
-
-val rand = new scala.util.Random()
 
 // Ref: https://stackoverflow.com/q/2049502/3096687
 val localChars: Array[Char] = (
@@ -36,28 +34,27 @@ def isValidEmail(em: String): Boolean = em match {
   case _                                                => false
 }
 
+case class RandSeed(value: Int) extends AnyVal
+
 @main
 def main(SEED_IN: Int, fileStrings: String*): Unit = {
-
+  val rand = new scala.util.Random()
   val seedMsg =
     """
       | !!! !!! !!! !!! !!!    Important   !!! !!! !!! !!! !!!
       | !!! Change and record the random seed privately !!!
     """.stripMargin
-
-
   println(seedMsg)
 
-
-  @tailrec
-  def randomStringTailRecursive(nn: Int, charPool: Array[Char], list: List[Char]): List[Char] = {
-    val randIdx = Math.abs(rand.nextInt % charPool.length)
-    if (nn == 1) util.Random.nextPrintableChar :: list
-    else randomStringTailRecursive(nn-1, charPool, charPool(randIdx) :: list)
-  }
-
-  def randomString(nn: Int, charPool: Array[Char]): String = {
-    randomStringTailRecursive(nn, charPool, Nil).mkString
+  def randomString(nn: Int, charPool: Array[Char])(implicit rseed: RandSeed): String = {
+    rand.setSeed(rseed.value)
+    @tailrec
+    def loop(nn: Int, charPool: Array[Char], list: List[Char]): List[Char] = {
+      val randIdx = Math.abs(rand.nextInt % charPool.length)
+      if (nn == 1) charPool(randIdx) :: list
+      else loop(nn-1, charPool, charPool(randIdx) :: list)
+    }
+    loop(nn, charPool, Nil).mkString
   }
 
   /**
@@ -68,19 +65,19 @@ def main(SEED_IN: Int, fileStrings: String*): Unit = {
     *         spectrum of possible email addresses
     */
   def randEmail(local: String, domain: String): String = {
+    implicit val rseed: RandSeed = RandSeed(SEED_IN * local.hashCode - domain.hashCode)
+    rand.setSeed(rseed.value)
     @tailrec
     def loop(local: String, domain: String, seedIn: Int): String = {
       // Note the order of the following rand generation must be
       // preserved for reproducibility
-      rand.setSeed(SEED_IN * local.hashCode - domain.hashCode)
       val d1 = Math.abs(rand.nextInt % 5)
       val d2 = Math.abs(rand.nextInt % 5)
       val local2 = randomString(local.length + d1, localChars)
       val domain2 = randomString(domain.length + d2, domainChars)
-      val email = local2 + "@" + domain2
+      val email = local2 + "@" + domain2.stripSuffix("-")
       if (isValidEmail(email)) email else loop(local, domain2, seedIn + 1)
     }
-
     loop(local, domain, SEED_IN)
   }
 
@@ -90,11 +87,20 @@ def main(SEED_IN: Int, fileStrings: String*): Unit = {
     println(s"*** Replacing in $infile ***")
     val fileText: String = read! infile
     val outText: String = emailRegex.replaceAllIn(fileText, md => {
-      if (md.groupCount == 2)
-        md.group(1) + "@" +md.group(2)
-      else ""
+      Regex.quoteReplacement(
+        if (md.groupCount > 1 && md.group(2) != null && md.group(1) != null) {
+          println(s"${md.group(1)} AT ${md.group(2)}")
+          val tmp = randEmail(md.group(1), md.group(2))
+          println(s"new email is $tmp")
+          tmp // DEBUG
+        }
+        else {
+          println(s"Warning: partial match found")
+          md.group(0)
+        }
+      )
     })
-    write(infile, outText)
+    write.over(infile, outText)
 
     /*
     => fileText).foreach{ md =>
