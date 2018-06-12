@@ -9,7 +9,7 @@ import scala.util.matching.Regex
 // Ref: https://stackoverflow.com/q/2049502/3096687
 val localChars: Array[Char] = (
   ('A' to 'Z') ++ ('a' to 'z') ++ ('0' to '9') ++
-  "!#$%&'*+-/=?^_`{|}~".toCharArray
+  "!#$%&*+-/=?^_`{|}~".toCharArray // Removed ' due to complexity in output
 ).toArray
 //
 val domainChars: Array[Char] = (
@@ -21,23 +21,19 @@ val domainChars: Array[Char] = (
 // , the following is not a perfect matcher
 
 //Ref: https://stackoverflow.com/a/32445372/3096687
-val emailRegex =
+val emailRegexBare =
   """
     |([a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+)@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}
-    |[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?))*
-  """.stripMargin.replaceAll("\n", "").trim.r
+    |[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)*
+  """.stripMargin.replaceAll("\n", "").trim
 
-def isValidEmail(em: String): Boolean = em match {
-  case null                                             => false
-  case em if em.trim.isEmpty                            => false
-  case em if emailRegex.findFirstMatchIn(em).isDefined  => true
-  case _                                                => false
-}
+lazy val emailRegexSingles = s"""'$emailRegexBare'"""
+lazy val emailRegexDoubles = s""""$emailRegexBare""""
 
 case class RandSeed(value: Int) extends AnyVal
 
 @main
-def main(SEED_IN: Int, fileStrings: String*): Unit = {
+def main(/*quoteStyle: String,*/ SEED_IN: Int, fileStrings: String*): Unit = {
   val rand = new scala.util.Random()
   val seedMsg =
     """
@@ -45,6 +41,34 @@ def main(SEED_IN: Int, fileStrings: String*): Unit = {
       | !!! Change and record the random seed privately !!!
     """.stripMargin
   println(seedMsg)
+
+
+  //TODO: not really working as desired
+  /*
+  val bareOpt = "-bare"
+  val sqOpt   = "-squotes"
+  val dqOpt   = "-dquotes"
+  val emailRegex = quoteStyle match {
+    case opt if opt == bareOpt => emailRegexBare.r
+    case opt if opt == sqOpt => emailRegexSingles.r
+    case opt if opt == dqOpt => emailRegexDoubles.r
+    case _ => println(
+        s"Invalid quote matching option; please choose one of:" +
+        s"$bareOpt, $sqOpt, or $dqOpt"
+      )
+      throw new RuntimeException("Invalid Option")
+
+  }
+  */
+  val emailRegex = emailRegexBare.r
+
+
+  def isValidEmail(em: String): Boolean = em match {
+    case null                                             => false
+    case em if em.trim.isEmpty                            => false
+    case em if emailRegex.findFirstMatchIn(em).isDefined  => true
+    case _                                                => false
+  }
 
   def randomString(nn: Int, charPool: Array[Char])(implicit rseed: RandSeed): String = {
     rand.setSeed(rseed.value)
@@ -76,7 +100,12 @@ def main(SEED_IN: Int, fileStrings: String*): Unit = {
       val local2 = randomString(local.length + d1, localChars)
       val domain2 = randomString(domain.length + d2, domainChars)
       val email = local2 + "@" + domain2.stripSuffix("-")
-      if (isValidEmail(email)) email else loop(local, domain2, seedIn + 1)
+      if (isValidEmail(email)) email
+      else {
+        val nextSeed = seedIn + 1
+        rand.setSeed(nextSeed)
+        loop(local, domain2, nextSeed)
+      }
     }
     loop(local, domain, SEED_IN)
   }
