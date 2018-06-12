@@ -24,7 +24,7 @@ val domainChars: Array[Char] = (
 val emailRegexBare =
   """
     |([a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+)@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}
-    |[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)*
+    |[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)*
   """.stripMargin.replaceAll("\n", "").trim
 
 lazy val emailRegexSingles = s"""'$emailRegexBare'"""
